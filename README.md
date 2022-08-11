@@ -2,6 +2,9 @@
 Example to show how to build a simple wasm app in pur c++ using Harfang 3D engine (https://github.com/scorpheus/harfang3d/tree/main)  
 Download the project https://github.com/ejulien/FABGen to compile Harfang3D.
 
+# Demo
+https://scorpheus.github.io/harfang_emscripten_c/build_emsdk/bin/emscripten_harfang.html
+
 # Compile
 To compile see "compile_with_emscripten_note.txt" on windows WSL (works on linux too)
 
