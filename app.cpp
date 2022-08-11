@@ -2,13 +2,13 @@
  *  Copyright harfang_emscripten_c - 2020-2022 Movida Production - Camille Dudognon - Thomas Simonnet
  */
 
-//#ifdef EMSCRIPTEN
+#ifdef EMSCRIPTEN
 #include <emscripten/bind.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/val.h>
 #include <emscripten/wire.h>
-//#endif
+#endif
 
 #include <engine/scene.h>
 #include <engine/assets.h>
@@ -37,6 +37,16 @@ hg::Keyboard keyboard;
 hg::Mouse mouse;
 
 
+void InitScene() {
+	// init scene
+	hg::LoadSceneContext ctx;
+	hg::LoadSceneFromAssets("DamagedHelmet/DamagedHelmet.scn", scene, res, hg::GetForwardPipelineInfo(), ctx);
+
+	node = scene.GetNode("node_damagedHelmet_-6514");
+	camera = scene.GetNode("Camera");
+}
+
+#ifdef EMSCRIPTEN
 // callback to load file
 bool is_downloading;
 void progress_load_zip(unsigned, void *, int p) {
@@ -53,17 +63,14 @@ void load_zip(unsigned, void *, const char *file_name) {
 	is_downloading = true;
 	
 	// init scene
-	hg::LoadSceneContext ctx;
-	hg::LoadSceneFromAssets("DamagedHelmet/DamagedHelmet.scn", scene, res, hg::GetForwardPipelineInfo(), ctx);
-
-	node = scene.GetNode("node_damagedHelmet_-6514");
-	camera = scene.GetNode("Camera");
+	InitScene();
 }
 
 void GetAssetsPackage(std::string s){
 	is_downloading = false;
 	emscripten_async_wget2(s.c_str(), s.c_str(), "GET", "", nullptr, &load_zip, &error_load_zip, &progress_load_zip);
 }
+#endif
 
 void loop() {
 	auto dt = hg::tick_clock();
@@ -110,7 +117,11 @@ void loop() {
 
 int main(int argc, char* argv[])
 {
+#ifndef EMSCRIPTEN
+	exe_path = std::filesystem::current_path();
+#else
 	exe_path = std::filesystem::path();
+#endif
 
 	hg::set_log_level(hg::LL_Normal);
 	hg::set_log_detailed(false);
@@ -118,15 +129,24 @@ int main(int argc, char* argv[])
 	hg::InputInit();
 	hg::WindowSystemInit();
 
+#ifndef EMSCRIPTEN
+	width = 1600;
+	height = 900;
+#else
 	double w, h;
 	emscripten_get_element_css_size("canvas", &w, &h);
 	width = w;
 	height = h;
 	hg::log(hg::format("windows size: %1x%2").arg(width).arg(height).c_str());
+#endif
 
 	win = hg::NewWindow(width, height);
 
+#ifndef EMSCRIPTEN
+	hg::RenderInit(win, bgfx::RendererType::Direct3D11, nullptr);
+#else
 	hg::RenderInit(win, bgfx::RendererType::OpenGLES);
+#endif
 	bgfx::reset(width, height, BGFX_RESET_MSAA_X8 | BGFX_RESET_VSYNC | BGFX_RESET_FLIP_AFTER_RENDER | BGFX_RESET_FLUSH_AFTER_RENDER | BGFX_RESET_MAXANISOTROPY);
 
 	hg::SetWindowTitle(win, std::string("Harfang/Emscripten"));
@@ -134,7 +154,17 @@ int main(int argc, char* argv[])
 	// rendering pipeline
 	pipeline = hg::CreateForwardPipeline(2048, false);
 
+#ifndef EMSCRIPTEN
+	hg::AddAssetsPackage((exe_path / "project_compiled.zip").string().c_str());
+	InitScene();
+#else
 	GetAssetsPackage("project_compiled.zip");
+#endif
 
+#ifdef EMSCRIPTEN
 	emscripten_set_main_loop(loop, 0, 1);
+#else
+	while (!hg::ReadKeyboard("default").key[hg::K_Escape] && hg::IsWindowOpen(win))
+		loop();
+#endif
 }
