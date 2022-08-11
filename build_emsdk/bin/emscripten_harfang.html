@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        canvas.emscripten {
+            width: 1024px;
+            height: 768px;
+            border: 0px none;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+
+        #loadingDiv {
+            text-align: center;
+        }
+        #output {
+            width: 100%;
+            height: 200px;
+            margin: 0 auto;
+            margin-top: 10px;
+            border-left: 0px;
+            border-right: 0px;
+            padding-left: 0px;
+            padding-right: 0px;
+            display: block;
+            background-color: black;
+            color: white;
+            font-family: 'Lucida Console', Monaco, monospace;
+            outline: none;
+        }
+    </style>
+    <meta charset="utf-8" />
+    <title>Viewer Harfang</title>
+</head>
+<body style="background-color:powderblue;">
+    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+
+    <textarea id="output" rows="8"></textarea>
+    <script type="text/javascript" src="harfang_emscripten_c.js"></script>
+    <script type="text/javascript">
+
+        // instantiate harfang
+        var harfang;
+        Harfang({
+            canvas: (() => document.getElementById('canvas'))(),
+        }).then(function (hg) {  
+            harfang = hg;
+        })
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+sudo apt-get install build-essential libssl-dev clang-12 xorg-dev
+
+//install emsdk
+https://emscripten.org/docs/getting_started/downloads.html#sdk-download-and-install
+cd /mnt/c/boulot/works/Harfang/emsdk
+git pull
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+
+//install cmake
+wget https://github.com/Kitware/CMake/releases/download/v3.24.0/cmake-3.24.0.tar.gz
+tar xzf cmake-3.24.0.tar.gz
+cd cmake-3.24.0
+./bootstrap
+make -j 19
+sudo make install
+
+// install python 3
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.10 python3-pip
+pip3.10 uninstall setuptools
+pip3.10 install setuptools
+pip3.10 install pypeg2
+
+// on linux
+cd /mnt/c/boulot/works/Harfang/emsdk
+source ./emsdk_env.sh
+export EMSDK=/mnt/c/boulot/works/Harfang/emsdk
+cd /mnt/c/boulot/works/Harfang/harfang_emscripten_c/build_emsdk
+
+// build harfang_emscripten_c
+cd /mnt/c/boulot/works/Harfang/harfang_emscripten_c/build_emsdk
+
+emcmake /usr/local/bin/cmake .. -DCMAKE_BUILD_TYPE=Release \
+-DHG_FABGEN_PATH=../../harfang/extern/fabgen
+
+/usr/local/bin/cmake --build . --verbose --config Release -j 19
