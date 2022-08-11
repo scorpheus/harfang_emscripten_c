@@ -54,9 +54,9 @@ void load_zip(unsigned, void *, const char *file_name) {
 	
 	// init scene
 	hg::LoadSceneContext ctx;
-	hg::LoadSceneFromAssets("scene/scene.scn", scene, res, hg::GetForwardPipelineInfo(), ctx);
+	hg::LoadSceneFromAssets("DamagedHelmet/DamagedHelmet.scn", scene, res, hg::GetForwardPipelineInfo(), ctx);
 
-	node = scene.GetNode("Sketchfab_model");
+	node = scene.GetNode("node_damagedHelmet_-6514");
 	camera = scene.GetNode("Camera");
 }
 
@@ -87,7 +87,7 @@ void loop() {
                     
 	auto cam_pos = camera.GetTransform().GetPos();
 	auto cam_rot = camera.GetTransform().GetRot();
-	auto cam_speed = 0.3f;
+	auto cam_speed = 20.f;
 	hg::FpsController(keyboard, mouse, cam_pos, cam_rot, cam_speed, dt);
 	camera.GetTransform().SetPos(cam_pos);
 	camera.GetTransform().SetRot(cam_rot);
