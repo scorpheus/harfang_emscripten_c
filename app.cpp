@@ -16,67 +16,76 @@
 #include <engine/forward_pipeline.h>
 #include <engine/scene_forward_pipeline.h>
 #include <engine/fps_controller.h>
+#include <engine/create_geometry.h>
 
 #include <foundation/format.h>
 #include <foundation/log.h>
+#include <foundation/matrix4.h>
 #include <foundation/clock.h>
+#include <foundation/projection.h>
 #include <platform/input_system.h>
 #include <platform/window_system.h>
 
 #include <filesystem>
 
+using namespace hg;
+
 int width, height;
-hg::Node node, camera;
-hg::Window* win;
-int current_frame;
-std::filesystem::path exe_path;
-hg::Scene scene;
-hg::PipelineResources res;
-hg::ForwardPipeline pipeline;
-hg::Keyboard keyboard;
-hg::Mouse mouse;
+Window* win;
+
+bgfx::ProgramHandle prg;
+Model cube_mdl;
 
 
 void InitScene() {
-	// init scene
-	hg::LoadSceneContext ctx;
-	hg::LoadSceneFromAssets("DamagedHelmet/DamagedHelmet.scn", scene, res, hg::GetForwardPipelineInfo(), ctx);
+	// create cube mdl
+	bgfx::VertexLayout vs_decl;
 
-	node = scene.GetNode("node_damagedHelmet_-6514");
-	camera = scene.GetNode("Camera");
-}
+	vs_decl.begin();
+	vs_decl.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float);
+	vs_decl.add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float);
+	vs_decl.end();
 
-#ifdef EMSCRIPTEN
-// callback to load file
-bool is_downloading;
-void progress_load_zip(unsigned, void *, int p) {
-	float loading_value = p / 100.f;
-	hg::log(hg::format("Loading progress: %1").arg(p));
-}
-void error_load_zip(unsigned, void *, int err) {
-	hg::log(hg::format("Loading error: %1").arg(err));
-}
+	cube_mdl = CreateCubeModel(vs_decl, 1, 1, 1);
 
-void load_zip(unsigned, void *, const char *file_name) {
-	hg::log(hg::format("Loading file: %1").arg(file_name));
-	hg::AddAssetsPackage(file_name);
-	is_downloading = true;
-	
-	// init scene
-	InitScene();
-}
+	// 
+	// load program
+	// load shader
+	extern unsigned char mdl_vsb[];
+	extern unsigned int mdl_vsb_len;
 
-void GetAssetsPackage(std::string s){
-	is_downloading = false;
-	emscripten_async_wget2(s.c_str(), s.c_str(), "GET", "", nullptr, &load_zip, &error_load_zip, &progress_load_zip);
+	const auto mem_vs = bgfx::copy(mdl_vsb, mdl_vsb_len);
+	const char* vs_name = "default_mdl.vsb";
+	auto vs = bgfx::createShader(mem_vs);
+
+	if (!bgfx::isValid(vs))
+		warn(format("Failed to load vertex shader '%1'").arg(vs_name));
+	else
+		bgfx::setName(vs, vs_name);
+
+	extern unsigned char mdl_fsb[];
+	extern unsigned int mdl_fsb_len;
+
+	const auto mem_fs = bgfx::copy(mdl_fsb, mdl_fsb_len);
+	const char* fs_name = "default_mdl.fsb";
+	auto fs = bgfx::createShader(mem_fs);
+
+	if (!bgfx::isValid(fs))
+			warn(format("Failed to load fragment shader '%1'").arg(fs_name));
+	else
+		bgfx::setName(vs, vs_name);
+
+	prg = bgfx::createProgram(vs, fs, true);
+
+	if (!bgfx::isValid(prg))
+		warn(format("Failed to create program from shader '%1' and '%2'").arg(vs_name).arg(fs_name));
 }
-#endif
 
 void loop() {
-	auto dt = hg::tick_clock();
+	auto dt = tick_clock();
 
 	int w, h;
-	hg::GetWindowClientSize(win, w, h);
+	GetWindowClientSize(win, w, h);
 
 	// resize
 	if (w != 0 && h != 0 && (w != width || h != height)) {
@@ -85,49 +94,35 @@ void loop() {
 
 		bgfx::reset(width, height, BGFX_RESET_MSAA_X8 | BGFX_RESET_VSYNC | BGFX_RESET_FLIP_AFTER_RENDER | BGFX_RESET_FLUSH_AFTER_RENDER | BGFX_RESET_MAXANISOTROPY);
 
-		current_frame = bgfx::frame();
-		current_frame = bgfx::frame();
+		bgfx::frame();
+		bgfx::frame();
 	}
 
-	keyboard.Update();
-	mouse.Update();
-                    
-	auto cam_pos = camera.GetTransform().GetPos();
-	auto cam_rot = camera.GetTransform().GetRot();
-	auto cam_speed = 20.f;
-	hg::FpsController(keyboard, mouse, cam_pos, cam_rot, cam_speed, dt);
-	camera.GetTransform().SetPos(cam_pos);
-	camera.GetTransform().SetRot(cam_rot);
+	bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+	bgfx::setViewRect(0, 0, 0, width, height);
+	//
+	const auto cam = TransformationMat4({ 0.f, 0.f, -2.f }, { 0.f, 0.f, 0.f });
 
-	scene.Update(dt);
+	const auto view = InverseFast(cam);
+	const auto proj = ComputePerspectiveProjectionMatrix(0.01f, 100.f, 1.0f, { (float)width / (float)height, 1.f });
 
-	bgfx::ViewId view_id = 0;
-	hg::SceneForwardPipelinePassViewId views;
-	hg::SubmitSceneToPipeline(view_id, scene, hg::Rect<int>(0, 0, width, height), true, pipeline, res, views);
+	bgfx::setViewTransform(0, to_bgfx(view).data(), to_bgfx(proj).data());
 
-	auto v = node.GetTransform().GetRot();
-	v.y = v.y + 1 * hg::time_to_sec_f(dt);
-	node.GetTransform().SetRot(v);
-	
-	current_frame = bgfx::frame();
+	Mat4 m = TransformationMat4({ 0, 0, 0.f }, { 0.f, time_to_sec_f(get_clock()), 0.f });
+	DrawModel(0, cube_mdl, prg, {}, {}, &m);
 
-	hg::UpdateWindow(win);
+	bgfx::frame();
+	UpdateWindow(win);
 }
 
 
 int main(int argc, char* argv[])
 {
-#ifndef EMSCRIPTEN
-	exe_path = std::filesystem::current_path();
-#else
-	exe_path = std::filesystem::path();
-#endif
+	set_log_level(LL_Normal);
+	set_log_detailed(false);
 
-	hg::set_log_level(hg::LL_Normal);
-	hg::set_log_detailed(false);
-
-	hg::InputInit();
-	hg::WindowSystemInit();
+	InputInit();
+	WindowSystemInit();
 
 #ifndef EMSCRIPTEN
 	width = 1600;
@@ -137,34 +132,26 @@ int main(int argc, char* argv[])
 	emscripten_get_element_css_size("canvas", &w, &h);
 	width = w;
 	height = h;
-	hg::log(hg::format("windows size: %1x%2").arg(width).arg(height).c_str());
+	log(format("windows size: %1x%2").arg(width).arg(height).c_str());
 #endif
 
-	win = hg::NewWindow(width, height);
+	win = NewWindow(width, height);
 
 #ifndef EMSCRIPTEN
-	hg::RenderInit(win, bgfx::RendererType::Direct3D11, nullptr);
+	RenderInit(win, bgfx::RendererType::Direct3D11, nullptr);
 #else
-	hg::RenderInit(win, bgfx::RendererType::OpenGLES);
+	RenderInit(win, bgfx::RendererType::OpenGLES);
 #endif
 	bgfx::reset(width, height, BGFX_RESET_MSAA_X8 | BGFX_RESET_VSYNC | BGFX_RESET_FLIP_AFTER_RENDER | BGFX_RESET_FLUSH_AFTER_RENDER | BGFX_RESET_MAXANISOTROPY);
 
-	hg::SetWindowTitle(win, std::string("Harfang/Emscripten"));
+	SetWindowTitle(win, std::string("Harfang/Emscripten"));
 
-	// rendering pipeline
-	pipeline = hg::CreateForwardPipeline(2048, false);
-
-#ifndef EMSCRIPTEN
-	hg::AddAssetsPackage((exe_path / "project_compiled.zip").string().c_str());
 	InitScene();
-#else
-	GetAssetsPackage("project_compiled.zip");
-#endif
 
 #ifdef EMSCRIPTEN
 	emscripten_set_main_loop(loop, 0, 1);
 #else
-	while (!hg::ReadKeyboard("default").key[hg::K_Escape] && hg::IsWindowOpen(win))
+	while (!ReadKeyboard("default").key[K_Escape] && IsWindowOpen(win))
 		loop();
 #endif
 }
